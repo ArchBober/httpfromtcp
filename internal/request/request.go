@@ -1,6 +1,7 @@
 package request
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -16,60 +17,67 @@ type RequestLine struct {
 	Method        string
 }
 
-func RequestFromReader(reader io.Reader) (*Request, error) {
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return &Request{}, err
-	}
-	headerData := string(data)
-	requestLine, err := parseRequestLine(headerData)
-	if err != nil {
-		fmt.Printf("Error parsing header data: %v", err)
-		return &Request{}, err
-	}
+const crlf = "\r\n"
 
-	request := Request{RequestLine: requestLine}
-	return &request, nil
+func RequestFromReader(reader io.Reader) (*Request, error) {
+	rawBytes, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	requestLine, err := parseRequestLine(rawBytes)
+	if err != nil {
+		return nil, err
+	}
+	return &Request{
+		RequestLine: *requestLine,
+	}, nil
 }
 
-func parseRequestLine(line string) (RequestLine, error) {
-	requestLine := strings.Split(line, "\r\n")[0]
-	if len(requestLine) < 1 {
-		return RequestLine{}, fmt.Errorf("got empty header")
+func parseRequestLine(data []byte) (*RequestLine, error) {
+	idx := bytes.Index(data, []byte(crlf))
+	if idx == -1 {
+		return nil, fmt.Errorf("could not find CRLF in request-line")
+	}
+	requestLineText := string(data[:idx])
+	requestLine, err := requestLineFromString(requestLineText)
+	if err != nil {
+		return nil, err
+	}
+	return requestLine, nil
+}
+
+func requestLineFromString(str string) (*RequestLine, error) {
+	parts := strings.Split(str, " ")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("poorly formatted request-line: %s", str)
 	}
 
-	splitRequestLine := strings.Split(requestLine, " ")
-	if len(splitRequestLine) != 3 {
-		return RequestLine{}, fmt.Errorf("got invalid request line")
-	}
-
-	requestTarget := splitRequestLine[1]
-	if strings.Split(requestTarget, "")[0] != "/" {
-		return RequestLine{}, fmt.Errorf("got wrong path not starting with '/'")
-	}
-
-	method := splitRequestLine[0]
-	allowed := []string{"GET", "POST"}
-	isAllowed := false
-	for _, m := range allowed {
-		if method == m {
-			isAllowed = true
-			break
+	method := parts[0]
+	for _, c := range method {
+		if c < 'A' || c > 'Z' {
+			return nil, fmt.Errorf("invalid method: %s", method)
 		}
 	}
 
-	if !isAllowed {
-		return RequestLine{}, fmt.Errorf("not allowed method: %s", method)
+	requestTarget := parts[1]
+
+	versionParts := strings.Split(parts[2], "/")
+	if len(versionParts) != 2 {
+		return nil, fmt.Errorf("malformed start-line: %s", str)
 	}
 
-	splitHttp := strings.Split(splitRequestLine[2], "/")
-	if splitHttp[0] != "HTTP" || splitHttp[1] != "1.1" {
-		return RequestLine{}, fmt.Errorf("not supported http version: %s", splitRequestLine[2])
+	httpPart := versionParts[0]
+	if httpPart != "HTTP" {
+		return nil, fmt.Errorf("unrecognized HTTP-version: %s", httpPart)
+	}
+	version := versionParts[1]
+	if version != "1.1" {
+		return nil, fmt.Errorf("unrecognized HTTP-version: %s", version)
 	}
 
-	return RequestLine{
-		HttpVersion:   splitHttp[1],
-		RequestTarget: requestTarget,
+	return &RequestLine{
 		Method:        method,
+		RequestTarget: requestTarget,
+		HttpVersion:   versionParts[1],
 	}, nil
 }
