@@ -9,6 +9,7 @@ import (
 
 type Request struct {
 	RequestLine RequestLine
+	state       int
 }
 
 type RequestLine struct {
@@ -18,32 +19,58 @@ type RequestLine struct {
 }
 
 const crlf = "\r\n"
+const bufferSize = 8
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	rawBytes, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
+	buff := make([]byte, bufferSize, bufferSize)
+	readToIndex := 0
+	request := Request{
+		RequestLine: RequestLine{},
+		state:       0,
 	}
-	requestLine, err := parseRequestLine(rawBytes)
-	if err != nil {
-		return nil, err
+
+	for request.state != 1 {
+		nBytes, err := reader.Read(buff[readToIndex:])
+		if err != nil {
+			if err == io.EOF {
+				request.state = 1
+				break
+			}
+			return nil, err
+		}
+
+		readToIndex += nBytes
+
+		if readToIndex == len(buff) {
+			newBuff := make([]byte, 2*len(buff))
+			copy(newBuff, buff)
+			buff = newBuff
+		}
+
+		parsednbytes, err := request.parse(buff[0:readToIndex])
+		if err != nil {
+			return &Request{}, err
+		}
+
+		copy(buff, buff[parsednbytes:readToIndex])
+		readToIndex -= parsednbytes
+
 	}
-	return &Request{
-		RequestLine: *requestLine,
-	}, nil
+
+	return &request, nil
 }
 
-func parseRequestLine(data []byte) (*RequestLine, error) {
+func parseRequestLine(data []byte) (*RequestLine, int, error) {
 	idx := bytes.Index(data, []byte(crlf))
 	if idx == -1 {
-		return nil, fmt.Errorf("could not find CRLF in request-line")
+		return &RequestLine{}, 0, nil
 	}
 	requestLineText := string(data[:idx])
 	requestLine, err := requestLineFromString(requestLineText)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return requestLine, nil
+	return requestLine, idx + 2, nil
 }
 
 func requestLineFromString(str string) (*RequestLine, error) {
@@ -80,4 +107,23 @@ func requestLineFromString(str string) (*RequestLine, error) {
 		RequestTarget: requestTarget,
 		HttpVersion:   versionParts[1],
 	}, nil
+}
+
+func (r *Request) parse(data []byte) (int, error) {
+	if r.state == 0 {
+		requestLine, nbytes, err := parseRequestLine(data)
+		if err != nil {
+			return nbytes, err
+		}
+		if nbytes == 0 {
+			return 0, nil
+		}
+		r.RequestLine = *requestLine
+		r.state = 1
+		return nbytes, nil
+	}
+	if r.state == 1 {
+		return 0, fmt.Errorf("error: trying to read data in a done state")
+	}
+	return 0, fmt.Errorf("error: unknown state")
 }
