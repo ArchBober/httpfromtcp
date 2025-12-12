@@ -45,11 +45,14 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 	value := field[1]
 
-	if len(h[key]) == 0 {
-		h[key] = value
-	} else {
-		h[key] = h[key] + ", " + value
+	v, ok := h[key]
+	if ok {
+		value = strings.Join([]string{
+			v,
+			value,
+		}, ", ")
 	}
+	h[key] = value
 
 	return idx + 2, false, nil
 }
