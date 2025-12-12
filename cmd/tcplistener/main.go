@@ -37,6 +37,11 @@ func main() {
 				request.RequestLine.RequestTarget,
 				request.RequestLine.HttpVersion,
 			)
+			fmt.Println("Headers:")
+			for k := range request.Headers {
+				fmt.Printf("- %s: %s\n", k, request.Headers[k])
+			}
+
 		}(conn)
 	}
 }
