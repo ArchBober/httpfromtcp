@@ -18,11 +18,32 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if idx == 0 {
 		return 2, true, nil
 	}
+
 	trimData := strings.TrimSpace(string(data[:idx]))
 	field := strings.Split(trimData, " ")
+
 	if len(field) != 2 {
 		return 0, false, fmt.Errorf("wrong format too many values")
 	}
-	h[strings.Trim(field[0], ":")] = field[1]
+
+	key := strings.ToLower(strings.Trim(field[0], ":"))
+	if len(key) == 0 {
+		return 0, false, fmt.Errorf("empty key")
+	}
+
+	for _, s := range key {
+		if (s >= '0' && s <= '9') ||
+			(s >= 'A' && s <= 'Z') ||
+			(s >= '^' && s <= 'z') ||
+			(s >= '#' && s <= '\'') ||
+			(s >= '*' && s <= '.') ||
+			s == '!' || s == '|' || s == '~' {
+			continue
+		}
+		return 0, false, fmt.Errorf("wrong ASCII character in field-name: %c", s)
+	}
+
+	h[key] = field[1]
+
 	return idx + 2, false, nil
 }
