@@ -12,7 +12,8 @@ import (
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
-	state       requestState
+
+	state requestState
 }
 
 type RequestLine struct {
@@ -119,29 +120,47 @@ func requestLineFromString(str string) (*RequestLine, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	if r.state == requestStateInitialized {
-		requestLine, nbytes, err := parseRequestLine(data)
+	totalBytesParsed := 0
+	for r.state != requestStateDone {
+		n, err := r.parseSingle(data[totalBytesParsed:])
 		if err != nil {
-			return nbytes, err
+			return 0, err
 		}
-		if nbytes == 0 {
+		totalBytesParsed += n
+		if n == 0 {
+			break
+		}
+	}
+	return totalBytesParsed, nil
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.state {
+	case requestStateInitialized:
+		requestLine, n, err := parseRequestLine(data)
+		if err != nil {
+			// something actually went wrong
+			return 0, err
+		}
+		if n == 0 {
+			// just need more data
 			return 0, nil
 		}
 		r.RequestLine = *requestLine
 		r.state = requestStateParsingHeaders
-		return nbytes, nil
-	}
-
-	if r.state == requestStateParsingHeaders {
-		totalBytesParsed := 0
-		for r.state != requestStateDone {
-			n, err := r.parseSingle(data[totalBytesParsed:])
-			// ...
+		return n, nil
+	case requestStateParsingHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
 		}
-
-		if r.state == requestStateDone {
-			return 0, fmt.Errorf("error: trying to read data in a done state")
+		if done {
+			r.state = requestStateDone
 		}
+		return n, nil
+	case requestStateDone:
+		return 0, fmt.Errorf("error: trying to read data in a done state")
+	default:
+		return 0, fmt.Errorf("unknown state")
 	}
-	return 0, fmt.Errorf("error: unknown state")
 }

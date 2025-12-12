@@ -111,7 +111,3 @@ func TestHeadersParse(t *testing.T) {
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
 }
-
-func NewHeaders() Headers {
-	return Headers{}
-}
