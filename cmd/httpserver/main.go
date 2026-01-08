@@ -44,7 +44,6 @@ func handler(w *response.Writer, req *request.Request) {
 		return
 	}
 	handler200(w, req)
-	return
 }
 
 func handler400(w *response.Writer, _ *request.Request) {
@@ -63,7 +62,6 @@ func handler400(w *response.Writer, _ *request.Request) {
 	h.Override("Content-Type", "text/html")
 	w.WriteHeaders(h)
 	w.WriteBody(body)
-	return
 }
 
 func handler500(w *response.Writer, _ *request.Request) {
@@ -100,7 +98,6 @@ func handler200(w *response.Writer, _ *request.Request) {
 	h.Override("Content-Type", "text/html")
 	w.WriteHeaders(h)
 	w.WriteBody(body)
-	return
 }
 
 func proxyHandler(w *response.Writer, req *request.Request) {
