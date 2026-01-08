@@ -41,6 +41,7 @@ func main() {
 			for k := range request.Headers {
 				fmt.Printf("- %s: %s\n", k, request.Headers[k])
 			}
+			fmt.Printf("Body:\n%s\n", request.Body)
 
 		}(conn)
 	}
