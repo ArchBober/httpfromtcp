@@ -45,6 +45,10 @@ func handler(w *response.Writer, req *request.Request) {
 		handler500(w, req)
 		return
 	}
+	if req.RequestLine.RequestTarget == "/video" {
+		handlerVideo(w, req)
+		return
+	}
 	handler200(w, req)
 }
 
@@ -156,4 +160,19 @@ func proxyHandler(w *response.Writer, req *request.Request) {
 		fmt.Println("Error writing trailers:", err)
 	}
 	fmt.Println("Wrote trailers")
+}
+
+func handlerVideo(w *response.Writer, _ *request.Request) {
+	w.WriteStatusLine(response.ResponseOK)
+	const filepath = "assets/vim.mp4"
+	videoBytes, err := os.ReadFile(filepath)
+	if err != nil {
+		handler500(w, nil)
+		return
+	}
+
+	h := response.GetDefaultHeaders(len(videoBytes))
+	h.Override("Content-Type", "video/mp4")
+	w.WriteHeaders(h)
+	w.WriteBody(videoBytes)
 }
